@@ -7,15 +7,18 @@ import { JobPipeline } from './components/JobPipeline';
 import { InterviewPrep } from './components/InterviewPrep';
 import { FinanceCalculator } from './components/FinanceCalculator';
 import { MentorConsultation } from './components/MentorConsultation';
+import { GoogleDriveSyncModal } from './components/GoogleDriveSyncModal';
 import { initialSprints } from './data/sprintsData';
 import { Sprint, SprintTask, JobApplication } from './types';
+import { CareerSprintCloudData } from './services/googleDriveService';
 import { 
   CheckCircle2, 
   Github, 
   Globe, 
   Send as TelegramIcon,
   ShieldCheck,
-  Compass
+  Compass,
+  HardDrive
 } from 'lucide-react';
 
 const STORAGE_KEY_SPRINTS = 'careersprint_dmitry_sprints_v2';
@@ -73,6 +76,7 @@ const initialApplications: JobApplication[] = [
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('roadmap');
+  const [isDriveModalOpen, setIsDriveModalOpen] = useState<boolean>(false);
 
   // Load sprints from localStorage or fallback
   const [sprints, setSprints] = useState<Sprint[]>(() => {
@@ -203,6 +207,16 @@ export default function App() {
     setApplications(prev => prev.filter(a => a.id !== id));
   };
 
+  // Restore state from Google Drive backup
+  const handleRestoreData = (cloudData: CareerSprintCloudData) => {
+    if (cloudData.sprints && Array.isArray(cloudData.sprints)) {
+      setSprints(cloudData.sprints);
+    }
+    if (cloudData.applications && Array.isArray(cloudData.applications)) {
+      setApplications(cloudData.applications);
+    }
+  };
+
   // Overall metrics
   const totalTasks = sprints.reduce((acc, s) => acc + s.tasks.length, 0);
   const completedTasks = sprints.reduce((acc, s) => acc + s.tasks.filter(t => t.completed).length, 0);
@@ -217,6 +231,7 @@ export default function App() {
         progressPercent={overallProgress}
         completedTasksCount={completedTasks}
         totalTasksCount={totalTasks}
+        onOpenDriveSync={() => setIsDriveModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -250,6 +265,15 @@ export default function App() {
 
         {activeTab === 'mentor' && <MentorConsultation />}
       </main>
+
+      {/* Google Drive Cloud Sync Modal */}
+      <GoogleDriveSyncModal
+        isOpen={isDriveModalOpen}
+        onClose={() => setIsDriveModalOpen(false)}
+        sprints={sprints}
+        applications={applications}
+        onRestoreData={handleRestoreData}
+      />
 
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950 py-6 mt-12 text-xs text-slate-500">

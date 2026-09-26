@@ -19,6 +19,7 @@ interface HeaderProps {
   progressPercent: number;
   completedTasksCount: number;
   totalTasksCount: number;
+  onOpenDriveSync: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -26,7 +27,8 @@ export const Header: React.FC<HeaderProps> = ({
   setActiveTab,
   progressPercent,
   completedTasksCount,
-  totalTasksCount
+  totalTasksCount,
+  onOpenDriveSync
 }) => {
   const tabs = [
     { id: 'roadmap', label: 'Спринт-План', icon: Rocket },
@@ -126,6 +128,22 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="text-xs font-semibold text-amber-400 mt-0.5">
                 Part-time → Full-time Remote
               </div>
+            </div>
+
+            <div className="border-l border-slate-800 pl-4">
+              <button
+                type="button"
+                onClick={onOpenDriveSync}
+                className="flex items-center gap-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 hover:border-blue-400/50 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer shadow-sm"
+                title="Синхронизация с Google Дисском"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M12.01 1.5L4.5 14.5H19.5z" opacity="0.9" />
+                  <path fill="#34A853" d="M4.5 14.5L8.25 21H23.25L19.5 14.5z" />
+                  <path fill="#FBBC05" d="M0.75 21L4.5 14.5L12.01 1.5L8.25 1.5L0.75 14.5z" />
+                </svg>
+                <span>Google Drive</span>
+              </button>
             </div>
           </div>
         </div>
