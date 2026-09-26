@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   Cloud, 
@@ -13,7 +13,12 @@ import {
   ExternalLink,
   HardDrive,
   FileText,
-  Clock
+  Clock,
+  Copy,
+  Check,
+  Download,
+  Upload,
+  Settings
 } from 'lucide-react';
 import { 
   initAuth, 
@@ -32,6 +37,7 @@ import {
 import { Sprint, JobApplication } from '../types';
 import { User } from 'firebase/auth';
 import { playTaskCompleteSound, triggerConfetti } from '../utils/effects';
+import firebaseConfig from '../../firebase-applet-config.json';
 
 interface GoogleDriveSyncModalProps {
   isOpen: boolean;
@@ -55,6 +61,16 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
   const [backups, setBackups] = useState<DriveBackupMeta[]>([]);
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
   const [confirmRestoreId, setConfirmRestoreId] = useState<string | null>(null);
+  
+  // Specific error handler for domain authorization
+  const [isDomainUnauthorized, setIsDomainUnauthorized] = useState(false);
+  const [copiedDomain, setCopiedDomain] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Current domain
+  const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'dnikulshinwork.github.io';
+  const firebaseSettingsUrl = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`;
 
   // Initialize Auth listener on mount
   useEffect(() => {
@@ -92,6 +108,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
   const handleSignIn = async () => {
     setIsLoading(true);
     setStatusMessage(null);
+    setIsDomainUnauthorized(false);
     try {
       const res = await googleSignIn();
       setUser(res.user);
@@ -100,10 +117,25 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
       playTaskCompleteSound();
       await fetchBackups(res.accessToken);
     } catch (err: any) {
-      setStatusMessage({ type: 'error', text: err.message || 'Ошибка входа через Google' });
+      const errStr = (err.code || err.message || '').toString();
+      if (errStr.includes('auth/unauthorized-domain')) {
+        setIsDomainUnauthorized(true);
+        setStatusMessage({ 
+          type: 'error', 
+          text: `Домен ${currentDomain} не добавлен в список разрешенных доменов Firebase Authentication.` 
+        });
+      } else {
+        setStatusMessage({ type: 'error', text: err.message || 'Ошибка входа через Google' });
+      }
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleCopyDomain = () => {
+    navigator.clipboard.writeText(currentDomain);
+    setCopiedDomain(true);
+    setTimeout(() => setCopiedDomain(false), 2500);
   };
 
   const handleSignOut = async () => {
@@ -130,7 +162,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
     setIsLoading(true);
     setStatusMessage(null);
     try {
-      const result = await saveToGoogleDrive(sprints, applications);
+      await saveToGoogleDrive(sprints, applications);
       setStatusMessage({ 
         type: 'success', 
         text: `Все спринты и отклики успешно сохранены в Google Диск! (${new Date().toLocaleTimeString('ru-RU')})` 
@@ -178,6 +210,65 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Instant File Backup / Restore (works everywhere, 100% offline & without domain restrictions)
+  const handleDownloadFileBackup = () => {
+    const totalTasks = sprints.reduce((acc, s) => acc + s.tasks.length, 0);
+    const doneTasks = sprints.reduce((acc, s) => acc + s.tasks.filter(t => t.completed).length, 0);
+    const progress = Math.round((doneTasks / totalTasks) * 100) || 0;
+
+    const payload: CareerSprintCloudData = {
+      version: '2.0.0',
+      exportedAt: new Date().toISOString(),
+      device: navigator.userAgent,
+      sprints,
+      applications,
+      notes: `Спринты Дмитрия Никульшина. Прогресс: ${progress}%, выполнено задач: ${doneTasks}/${totalTasks}`
+    };
+
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `CareerSprint_State_${new Date().toISOString().slice(0, 10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+
+    playTaskCompleteSound();
+    setStatusMessage({
+      type: 'success',
+      text: 'Файл CareerSprint_State.json сохранен на ваше устройство! Вы можете загрузить его в свой Google Диск.'
+    });
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        if (!parsed.sprints || !Array.isArray(parsed.sprints)) {
+          throw new Error('Файл не содержит корректных данных спринтов');
+        }
+        onRestoreData(parsed);
+        playTaskCompleteSound();
+        triggerConfetti();
+        setStatusMessage({
+          type: 'success',
+          text: `Данные успешно загружены из файла! Восстановлено ${parsed.sprints.length} спринтов.`
+        });
+      } catch (err: any) {
+        setStatusMessage({
+          type: 'error',
+          text: err.message || 'Ошибка парсинга JSON файла'
+        });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   if (!isOpen) return null;
@@ -229,7 +320,69 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
             ) : (
               <RefreshCw className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
             )}
-            <div className="flex-1">{statusMessage.text}</div>
+            <div className="flex-1 leading-relaxed">{statusMessage.text}</div>
+          </div>
+        )}
+
+        {/* Domain Authorization Guide Banner (if auth/unauthorized-domain occurred) */}
+        {isDomainUnauthorized && (
+          <div className="bg-amber-950/40 border border-amber-500/40 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2 text-amber-300 text-xs font-bold uppercase tracking-wider">
+              <Settings className="w-4 h-4" />
+              <span>Как разрешить авторизацию на GitHub Pages (1 шаг)</span>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Google Firebase по умолчанию защищает вход и блокирует незнакомые домены. Чтобы авторизация заработала на <strong className="text-white">{currentDomain}</strong>:
+            </p>
+
+            <div className="bg-slate-950/80 rounded-lg p-3 text-xs text-slate-300 space-y-2 border border-slate-800">
+              <div className="flex items-start gap-2">
+                <span className="font-mono font-bold text-amber-400 shrink-0">1.</span>
+                <span>
+                  Откройте раздел настроек Firebase Auth:{' '}
+                  <a
+                    href={firebaseSettingsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-cyan-400 underline inline-flex items-center gap-1 font-mono hover:text-cyan-300"
+                  >
+                    <span>Firebase Console → Settings</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </span>
+              </div>
+
+              <div className="flex items-start gap-2">
+                <span className="font-mono font-bold text-amber-400 shrink-0">2.</span>
+                <span>
+                  Перейдите во вкладку <strong className="text-white font-mono">Authorized domains</strong> (Разрешенные домены) и нажмите кнопку <strong className="text-white font-mono">Add domain</strong>.
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800">
+                <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                  <span className="font-mono font-bold text-amber-400">3.</span>
+                  <span>Вставьте домен:</span>
+                  <code className="text-white bg-slate-900 px-1.5 py-0.5 rounded font-mono text-[11px] border border-slate-700">
+                    {currentDomain}
+                  </code>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCopyDomain}
+                  className="flex items-center gap-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded text-[11px] font-medium transition-colors"
+                >
+                  {copiedDomain ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedDomain ? 'Скопировано!' : 'Копировать'}</span>
+                </button>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-400">
+              После добавления домена нажмите кнопку «Войти через Google» снова — авторизация пройдет мгновенно.
+            </p>
           </div>
         )}
 
@@ -422,6 +575,46 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
             </div>
           </div>
         )}
+
+        {/* Offline File Sync Section (Always available, zero dependencies, no domain limits) */}
+        <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <Download className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Автономный бэкап в файл (работает без авторизации):</span>
+            </span>
+            <span className="text-[10px] text-slate-500 font-mono">100% Offline</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <button
+              type="button"
+              onClick={handleDownloadFileBackup}
+              className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs py-2 px-3 rounded-lg border border-slate-700 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Скачать CareerSprint_State.json</span>
+            </button>
+
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs py-2 px-3 rounded-lg border border-slate-700 transition-colors"
+              >
+                <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Восстановить из файла .json</span>
+              </button>
+            </div>
+          </div>
+        </div>
 
         {/* Security & Architecture Note */}
         <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 space-y-1.5 text-xs text-slate-400">
