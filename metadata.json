@@ -1,0 +1,6 @@
+{
+  "name": "CareerSprint OS — Менторский Кокпит Fullstack",
+  "description": "Пошаговый спринт-план, HR-стратегия, воронка вакансий и менторский трекер для перехода Дмитрия Никульшина на удаленную Fullstack разработку.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
