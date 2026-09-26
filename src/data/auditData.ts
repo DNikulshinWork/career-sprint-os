@@ -60,7 +60,7 @@ export const honestFullResumeText = `# Никульшин Дмитрий Юрь�
 Fullstack-разработчик (Node.js / React / Next.js / TypeScript)
 
 Телефон: +7 (926) 718-94-08 | Email: d.nikulshin.work@gmail.com
-Telegram: @nikulshin_dev | GitHub: https://github.com/DNikulshin | Портфолио: https://dnikulshin.github.io
+Telegram: @nikulshin_dev | Канал: https://t.me/dnikulshin_devlog | GitHub: https://github.com/DNikulshin | Портфолио: https://dnikulshin.github.io
 Локация: Москва (Готов к 100% удаленной работе, домашний офис оборудован)
 
 ## О СЕБЕ
