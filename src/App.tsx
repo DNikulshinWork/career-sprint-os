@@ -120,9 +120,41 @@ export default function App() {
       if (s.id !== sprintId) return s;
       const updatedTasks = s.tasks.map(t => {
         if (t.id !== taskId) return t;
-        return { ...t, completed: !t.completed };
+        const nextCompleted = !t.completed;
+        return { 
+          ...t, 
+          completed: nextCompleted,
+          completedAt: nextCompleted ? new Date().toLocaleDateString('ru-RU') : undefined
+        };
       });
       // Check if all completed
+      const allDone = updatedTasks.every(t => t.completed);
+      return {
+        ...s,
+        tasks: updatedTasks,
+        status: allDone ? 'completed' : s.status === 'not_started' ? 'in_progress' : s.status
+      };
+    }));
+  };
+
+  // Save detailed task result with artifact
+  const handleSaveTaskResult = (
+    sprintId: number, 
+    taskId: string, 
+    result: { completed: boolean; artifactUrl?: string; artifactNotes?: string }
+  ) => {
+    setSprints(prev => prev.map(s => {
+      if (s.id !== sprintId) return s;
+      const updatedTasks = s.tasks.map(t => {
+        if (t.id !== taskId) return t;
+        return {
+          ...t,
+          completed: result.completed,
+          completedAt: result.completed ? (t.completedAt || new Date().toLocaleDateString('ru-RU')) : undefined,
+          artifactUrl: result.artifactUrl !== undefined ? result.artifactUrl : t.artifactUrl,
+          artifactNotes: result.artifactNotes !== undefined ? result.artifactNotes : t.artifactNotes
+        };
+      });
       const allDone = updatedTasks.every(t => t.completed);
       return {
         ...s,
@@ -195,6 +227,7 @@ export default function App() {
             onToggleTask={handleToggleTask}
             onUpdateSprintStatus={handleUpdateSprintStatus}
             onAddTask={handleAddTask}
+            onSaveTaskResult={handleSaveTaskResult}
           />
         )}
 

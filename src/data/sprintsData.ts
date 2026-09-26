@@ -18,7 +18,11 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Готовый текст резюме с 2 позиционированиями: «Fullstack разработчик (Node.js/React/NestJS)» и «Fullstack & AI Solutions Engineer».',
         completed: true,
         category: 'hr',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'resume_edit',
+        completedAt: '26.09.2026',
+        artifactUrl: 'https://hh.ru',
+        artifactNotes: 'Текст резюме переработан под стандарт Product Fullstack инженера.'
       },
       {
         id: 's1-2',
@@ -27,16 +31,20 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Обновленный README.md в corporate-transport с рабочей демонстрацией.',
         completed: false,
         category: 'github',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'readme_corporate',
+        artifactUrl: 'https://github.com/DNikulshin/corporate-transport'
       },
       {
         id: 's1-3',
         title: 'Упаковка GitHub: Репозиторий DocBrain (RAG-система)',
-        description: 'DocBrain — твой золотой козырь. Сейчас RAG ищет каждая вторая компания. Оформить архитектурную схему: парсинг документов -> чанкинг -> эмбеддинги -> pgvector -> LLM context -> цитирование. Записать короткое 1-минутное Loom/Licecap видео работы.',
+        description: 'DocBrain — твой золотой козырь. Сейчас RAG ищет каждая вторая компания. Оформить архитектурную схему: парсинг документов -> чанкинг -> эмбеддинги -> pgvector -> LLM context -> цитирование. Записать короткое 1-минутное видео работы.',
         deliverable: 'Полноценный production-ready README с описанием архитектуры и тестами.',
         completed: false,
         category: 'github',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'readme_docbrain',
+        artifactUrl: 'https://github.com/DNikulshin/docbrain'
       },
       {
         id: 's1-4',
@@ -45,7 +53,9 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Оформленный репозиторий с примером входящих заявок и скоринга.',
         completed: false,
         category: 'github',
-        priority: 'medium'
+        priority: 'medium',
+        interactiveType: 'scan_agent',
+        artifactUrl: 'https://github.com/DNikulshin/scan-agent'
       },
       {
         id: 's1-5',
@@ -54,7 +64,10 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Готовый Telegram-профиль, готовый принимать сообщения от фаундеров и лидов.',
         completed: true,
         category: 'hr',
-        priority: 'medium'
+        priority: 'medium',
+        interactiveType: 'telegram_bio',
+        completedAt: '26.09.2026',
+        artifactUrl: 'https://t.me/nikulshin_dev'
       }
     ]
   },
@@ -75,7 +88,8 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Агент шлет в твой личный канал горячие лиды с бирж и Telegram-каналов.',
         completed: false,
         category: 'outreach',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'scan_agent'
       },
       {
         id: 's2-2',
@@ -84,7 +98,10 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Таблица лидов с колонками: Компания, Контакт, Стек, Статус питча.',
         completed: false,
         category: 'outreach',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'leads_database',
+        metricCurrent: 0,
+        metricTarget: 30
       },
       {
         id: 's2-3',
@@ -93,7 +110,10 @@ export const initialSprints: Sprint[] = [
         deliverable: '30 отправленных питчей, минимум 4 ответа с интересом.',
         completed: false,
         category: 'outreach',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'cold_pitch_counter',
+        metricCurrent: 0,
+        metricTarget: 30
       },
       {
         id: 's2-4',
@@ -102,7 +122,8 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Готовые шаблоны документов для заключения сделок без трений.',
         completed: false,
         category: 'finance',
-        priority: 'medium'
+        priority: 'medium',
+        interactiveType: 'contract_checklist'
       }
     ]
   },
@@ -123,7 +144,8 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Конспект ответов и отработанный лайвкодинг без шпаргалок.',
         completed: false,
         category: 'code',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'event_loop_quiz'
       },
       {
         id: 's3-2',
@@ -132,7 +154,8 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Четкое умение аргументировать выбор архитектуры на фронтенде.',
         completed: false,
         category: 'code',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'nextjs_quiz'
       },
       {
         id: 's3-3',
@@ -141,7 +164,8 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Уверенные ответы по оптимизации тяжелых запросов.',
         completed: false,
         category: 'code',
-        priority: 'medium'
+        priority: 'medium',
+        interactiveType: 'postgres_quiz'
       },
       {
         id: 's3-4',
@@ -150,7 +174,8 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Готовый рассказ на 10 минут с архитектурной доской.',
         completed: false,
         category: 'interview',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'system_design_fleet'
       }
     ]
   },
@@ -171,7 +196,10 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Трекинг в CRM-канбане всех откликов и статусов.',
         completed: false,
         category: 'outreach',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'daily_counter',
+        metricCurrent: 0,
+        metricTarget: 10
       },
       {
         id: 's4-2',
@@ -180,7 +208,8 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Железобетонная уверенность и дружелюбие на первом созвоне.',
         completed: false,
         category: 'interview',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'interview_defense'
       },
       {
         id: 's4-3',
@@ -189,7 +218,8 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Экономия времени и отсев неадекватных работодателей.',
         completed: false,
         category: 'hr',
-        priority: 'medium'
+        priority: 'medium',
+        interactiveType: 'test_task_rule'
       },
       {
         id: 's4-4',
@@ -198,7 +228,8 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Подписанный контракт и предоплата/первый таск в трекере.',
         completed: false,
         category: 'finance',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'first_contract'
       }
     ]
   },
@@ -215,11 +246,12 @@ export const initialSprints: Sprint[] = [
       {
         id: 's5-1',
         title: 'Организация домашней рабочей среды и тайм-блоков',
-        description: 'Настроить Pomodoro-трекер (например Toggl Track). Зафиксировать жесткие окна для задач коммерческого проекта. Вести лог выполненных задач.',
+        description: 'Настроить Pomodoro-трекер. Зафиксировать жесткие окна для задач коммерческого проекта. Вести лог выполненных задач.',
         deliverable: 'Стабильный недельный ритм без авралов.',
         completed: false,
         category: 'hr',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'pomodoro'
       },
       {
         id: 's5-2',
@@ -228,7 +260,8 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Положительный кейс в портфолио с реальным заказчиком.',
         completed: false,
         category: 'hr',
-        priority: 'medium'
+        priority: 'medium',
+        interactiveType: 'recommendation'
       },
       {
         id: 's5-3',
@@ -237,7 +270,8 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Финансовая подушка безопасности сформирована на 2–3 месяца вперед.',
         completed: false,
         category: 'finance',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'rate_scale'
       }
     ]
   },
@@ -258,7 +292,8 @@ export const initialSprints: Sprint[] = [
         deliverable: '3-4 финальных интервью с техническими директорами.',
         completed: false,
         category: 'outreach',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'generic'
       },
       {
         id: 's6-2',
@@ -267,7 +302,8 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Максимизация условий оффера.',
         completed: false,
         category: 'finance',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'rate_scale'
       },
       {
         id: 's6-3',
@@ -276,7 +312,8 @@ export const initialSprints: Sprint[] = [
         deliverable: 'Успешное прохождение испытательного срока на основном месте.',
         completed: false,
         category: 'hr',
-        priority: 'high'
+        priority: 'high',
+        interactiveType: 'offer_matrix'
       }
     ]
   }

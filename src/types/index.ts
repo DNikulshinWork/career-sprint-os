@@ -8,6 +8,33 @@ export interface SprintTask {
   completed: boolean;
   category: 'hr' | 'github' | 'code' | 'outreach' | 'interview' | 'finance';
   priority: 'high' | 'medium' | 'low';
+  completedAt?: string;
+  artifactUrl?: string;
+  artifactNotes?: string;
+  interactiveType?: 
+    | 'resume_edit' 
+    | 'readme_corporate' 
+    | 'readme_docbrain' 
+    | 'scan_agent' 
+    | 'telegram_bio' 
+    | 'cold_pitch_counter' 
+    | 'leads_database'
+    | 'contract_checklist' 
+    | 'event_loop_quiz' 
+    | 'nextjs_quiz' 
+    | 'postgres_quiz' 
+    | 'system_design_fleet' 
+    | 'daily_counter' 
+    | 'interview_defense' 
+    | 'test_task_rule' 
+    | 'first_contract'
+    | 'pomodoro' 
+    | 'recommendation' 
+    | 'rate_scale' 
+    | 'offer_matrix'
+    | 'generic';
+  metricCurrent?: number;
+  metricTarget?: number;
 }
 
 export interface Sprint {
