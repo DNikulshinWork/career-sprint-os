@@ -3,35 +3,31 @@ import {
   X, 
   Cloud, 
   CloudUpload, 
-  CloudDownload, 
   Trash2, 
   CheckCircle2, 
   AlertCircle, 
   ShieldCheck, 
   RefreshCw, 
   LogOut, 
-  ExternalLink,
-  HardDrive,
-  FileText,
-  Clock,
-  Copy,
-  Check,
-  Download,
-  Upload,
-  Settings,
-  Key,
-  FolderOpen,
-  Sparkles,
-  Info
+  HardDrive, 
+  FileText, 
+  Clock, 
+  Copy, 
+  Check, 
+  Download, 
+  Upload, 
+  Key, 
+  FolderOpen, 
+  Sparkles, 
+  Info,
+  CheckCircle
 } from 'lucide-react';
 import { 
   initAuth, 
   googleSignIn, 
   logout, 
-  getAccessToken,
   getStoredCustomClientId,
-  setStoredCustomClientId,
-  signInWithGIS
+  setStoredCustomClientId
 } from '../services/googleAuth';
 import { 
   saveToGoogleDrive, 
@@ -67,16 +63,15 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
   const [confirmRestoreId, setConfirmRestoreId] = useState<string | null>(null);
   
-  // Custom Client ID state for direct Google API connection
-  const [activeTab, setActiveTab] = useState<'instant' | 'direct_api'>('instant');
+  // Tab: 'cloud_file' vs 'direct_oauth'
+  const [activeTab, setActiveTab] = useState<'cloud_file' | 'direct_oauth'>('cloud_file');
   const [customClientId, setCustomClientId] = useState<string>('');
   const [isEditingClientId, setIsEditingClientId] = useState<boolean>(false);
-  const [copiedDomain, setCopiedDomain] = useState(false);
+  const [copiedOrigin, setCopiedOrigin] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Current domain
-  const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'dnikulshinwork.github.io';
+  // Current domain & strict origin for Google Cloud Console
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://dnikulshinwork.github.io';
 
   // Initialize stored client ID
@@ -127,13 +122,13 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
       const res = await googleSignIn();
       setUser(res.user);
       setToken(res.accessToken);
-      setStatusMessage({ type: 'success', text: `Успешный вход в аккаунт: ${res.user.email || 'Google User'}` });
+      setStatusMessage({ type: 'success', text: `Успешный вход в аккаунт Google: ${res.user.email || 'Авторизован'}` });
       playTaskCompleteSound();
       await fetchBackups(res.accessToken);
     } catch (err: any) {
       setStatusMessage({ 
         type: 'error', 
-        text: err.message || 'Ошибка входа. Воспользуйтесь режимом «Файл для Google Диска» ниже.' 
+        text: err.message || 'Ошибка подключения к Google Drive API. Проверьте Authorized JavaScript origins.' 
       });
     } finally {
       setIsLoading(false);
@@ -146,15 +141,15 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
     setStatusMessage({
       type: 'success',
       text: customClientId.trim() 
-        ? 'Ваш личный Google Client ID сохранен! Теперь нажмите «Войти через Google».'
-        : 'Сброшено на настройки по умолчанию.'
+        ? 'Личный Google Client ID сохранен в браузере! Теперь можно войти через Google.'
+        : 'Настройки сброшены.'
     });
   };
 
   const handleCopyOrigin = () => {
     navigator.clipboard.writeText(currentOrigin);
-    setCopiedDomain(true);
-    setTimeout(() => setCopiedDomain(false), 2500);
+    setCopiedOrigin(true);
+    setTimeout(() => setCopiedOrigin(false), 2500);
   };
 
   const handleSignOut = async () => {
@@ -164,7 +159,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
       setUser(null);
       setToken(null);
       setBackups([]);
-      setStatusMessage({ type: 'info', text: 'Вы вышли из аккаунта Google' });
+      setStatusMessage({ type: 'info', text: 'Вы вышли из сессии Google' });
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err.message });
     } finally {
@@ -174,7 +169,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
 
   const handleSaveToDrive = async () => {
     if (!token) {
-      setStatusMessage({ type: 'error', text: 'Сначала войдите через Google' });
+      setStatusMessage({ type: 'error', text: 'Сначала выполните вход' });
       return;
     }
 
@@ -184,7 +179,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
       await saveToGoogleDrive(sprints, applications);
       setStatusMessage({ 
         type: 'success', 
-        text: `Все спринты и отклики успешно сохранены в Google Диск! (${new Date().toLocaleTimeString('ru-RU')})` 
+        text: `Все спринты и отклики успешно синхронизированы с Google Диском! (${new Date().toLocaleTimeString('ru-RU')})` 
       });
       playTaskCompleteSound();
       triggerConfetti();
@@ -231,7 +226,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
     }
   };
 
-  // Instant File Backup / Restore (works everywhere, 100% offline & without domain limits)
+  // Instant File Backup / Restore (Universal & Privacy-first standard)
   const handleDownloadFileBackup = () => {
     const totalTasks = sprints.reduce((acc, s) => acc + s.tasks.length, 0);
     const doneTasks = sprints.reduce((acc, s) => acc + s.tasks.filter(t => t.completed).length, 0);
@@ -257,7 +252,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
     playTaskCompleteSound();
     setStatusMessage({
       type: 'success',
-      text: 'Файл CareerSprint_State.json сохранен на ваше устройство! Теперь вы можете перенести его на Google Диск или открыть на другом устройстве.'
+      text: 'Файл CareerSprint_State.json сохранен на устройство! Вы можете загрузить его в свой Google Диск для надежного бэкапа.'
     });
   };
 
@@ -277,7 +272,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
         triggerConfetti();
         setStatusMessage({
           type: 'success',
-          text: `Данные успешно загружены из файла! Восстановлено ${parsed.sprints.length} спринтов.`
+          text: `Данные успешно восстановлены! Загружено ${parsed.sprints.length} спринтов и ${parsed.applications?.length || 0} откликов.`
         });
       } catch (err: any) {
         setStatusMessage({
@@ -305,49 +300,49 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
 
         {/* Header */}
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 via-blue-500/20 to-emerald-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 via-blue-500/20 to-emerald-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
             <HardDrive className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-xl font-bold text-white">
-                Хранилище и Синхронизация данных
+                Облачное хранилище CareerSprint OS
               </h3>
               <span className="text-[10px] font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded-full">
-                Google Drive
+                Google Drive Sync
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Упорядочение спринтов, базы откликов и артефактов без ограничений платформ
+              Сохранение и синхронизация прогресса спринтов, базы откликов и артефактов
             </p>
           </div>
         </div>
 
-        {/* Tab switcher: Instant Cloud File vs Direct Google API */}
+        {/* Tab Switcher */}
         <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800">
           <button
             type="button"
-            onClick={() => setActiveTab('instant')}
+            onClick={() => setActiveTab('cloud_file')}
             className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-lg transition-all ${
-              activeTab === 'instant'
+              activeTab === 'cloud_file'
                 ? 'bg-slate-800 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            <span>⚡ Файл для Google Диска (Работает прямо сейчас)</span>
+            <span>⚡ Файл для Google Диска (Рекомендуемый)</span>
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('direct_api')}
+            onClick={() => setActiveTab('direct_oauth')}
             className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-lg transition-all ${
-              activeTab === 'direct_api'
+              activeTab === 'direct_oauth'
                 ? 'bg-slate-800 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Key className="w-3.5 h-3.5 text-amber-400" />
-            <span>Прямой Google Drive API (OAuth)</span>
+            <Key className="w-3.5 h-3.5 text-blue-400" />
+            <span>Прямой Google Drive API (OAuth 2.0)</span>
           </button>
         </div>
 
@@ -372,7 +367,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
         )}
 
         {/* TAB 1: Instant Cloud File Backup & Restore (Zero friction, 100% reliable) */}
-        {activeTab === 'instant' && (
+        {activeTab === 'cloud_file' && (
           <div className="space-y-4">
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 space-y-4">
               <div className="flex items-start gap-3">
@@ -381,10 +376,10 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-white">
-                    Как это работает на GitHub Pages
+                    Автономная синхронизация состояния
                   </h4>
                   <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                    Так как GitHub Pages — это статический хостинг, самый надежный и быстрый способ синхронизации между вашим смартфоном, планшетом и рабочим ноутбуком — это единый файл состояния <strong className="text-white font-mono">CareerSprint_State.json</strong>.
+                    Единый структурированный файл <strong className="text-white font-mono">CareerSprint_State.json</strong> позволяет сохранять прогресс и мгновенно переносить его между вашим смартфоном, планшетом и рабочим компьютером.
                   </p>
                 </div>
               </div>
@@ -421,7 +416,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
 
               {/* Quick direct link to open Google Drive */}
               <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
-                <span className="text-slate-400">Храните файл в папке Google Диска:</span>
+                <span className="text-slate-400">Храните файл в любой папке вашего Google Диска:</span>
                 <a
                   href="https://drive.google.com/drive/my-drive"
                   target="_blank"
@@ -438,38 +433,23 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
             <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3.5 text-xs text-slate-400 space-y-1">
               <div className="flex items-center gap-1.5 text-slate-300 font-semibold">
                 <Info className="w-4 h-4 text-cyan-400" />
-                <span>Преимущество этого способа:</span>
+                <span>Преимущества:</span>
               </div>
               <p className="text-[11px] leading-relaxed">
-                Файл содержит 100% данных: все выполненные задачи 6 спринтов, сохраненные ссылки на репозитории и резюме, заметки, воронку откликов с контактами и настройки ставок. Вы никогда не потеряете прогресс при очистке кэша браузера.
+                Файл содержит 100% данных: все выполненные задачи 6 спринтов, прикрепленные ссылки на коммиты/резюме, заметки, воронку вакансий и финансовые расчеты. Никаких сторонних серверов или риска потери данных.
               </p>
             </div>
           </div>
         )}
 
         {/* TAB 2: Direct Google Drive API via User's Own OAuth Client ID */}
-        {activeTab === 'direct_api' && (
+        {activeTab === 'direct_oauth' && (
           <div className="space-y-4">
-            {/* Note about AI Studio Starter Tier restriction */}
-            <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl p-3.5 text-xs text-slate-300 leading-relaxed space-y-2">
-              <div className="flex items-center gap-1.5 text-amber-300 font-bold">
-                <Settings className="w-4 h-4" />
-                <span>Почему Firebase блокирует домен:</span>
-              </div>
-              <p className="text-[11px] text-slate-400">
-                Как видно на вашем скриншоте, проект <code className="text-white font-mono bg-slate-900 px-1 py-0.5 rounded">automated-vector-xcb1c</code> находится в режиме <strong className="text-white">AI Studio Starter Tier</strong>. В таких служебных проектах Google отключает возможность добавлять сторонние домены в белый список Firebase.
-              </p>
-              <p className="text-[11px] text-slate-300">
-                Чтобы авторизация работала напрямую в автоматическом режиме через Google API, вы можете указать свой личный бесплатный <strong className="text-white">Google OAuth Client ID</strong> (создается в вашей личной консоли Google Cloud).
-              </p>
-            </div>
-
-            {/* Custom Client ID Form */}
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-white flex items-center gap-1.5">
-                  <Key className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Личный Google OAuth Client ID (Опционально):</span>
+                  <Key className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Личный Google OAuth Client ID:</span>
                 </span>
                 {customClientId && !isEditingClientId && (
                   <button
@@ -486,10 +466,10 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
                 <div className="space-y-2">
                   <input
                     type="text"
-                    placeholder="e.g. 123456789-abcdef.apps.googleusercontent.com"
+                    placeholder="123456789-abcdef.apps.googleusercontent.com"
                     value={customClientId}
                     onChange={(e) => setCustomClientId(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-amber-400"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-cyan-400"
                   />
                   <div className="flex items-center justify-between gap-2">
                     <button
@@ -497,7 +477,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
                       onClick={handleCopyOrigin}
                       className="text-[11px] flex items-center gap-1 text-slate-400 hover:text-slate-200"
                     >
-                      {copiedDomain ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      {copiedOrigin ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                       <span>Origin: {currentOrigin}</span>
                     </button>
                     <div className="flex items-center gap-2">
@@ -516,7 +496,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
                       <button
                         type="button"
                         onClick={handleSaveCustomClientId}
-                        className="text-xs bg-amber-600 hover:bg-amber-500 text-white font-semibold px-4 py-1.5 rounded-lg transition-all"
+                        className="text-xs bg-cyan-600 hover:bg-cyan-500 text-white font-semibold px-4 py-1.5 rounded-lg transition-all"
                       >
                         Сохранить Client ID
                       </button>
@@ -528,8 +508,9 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
                   <span className="text-xs font-mono text-slate-300 truncate max-w-sm">
                     {customClientId}
                   </span>
-                  <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                    Активен
+                  <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    <span>Подключен</span>
                   </span>
                 </div>
               )}
@@ -571,33 +552,33 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
                     className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-xl text-xs transition-all"
                   >
                     <CloudUpload className="w-4 h-4" />
-                    <span>Сохранить в Google Диск</span>
+                    <span>Синхронизировать с Google Диском</span>
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Quick 3-step guide for personal Google Cloud OAuth */}
+            {/* Quick clean setup guide */}
             <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 text-xs text-slate-300 space-y-2">
-              <div className="font-semibold text-white">Инструкция создания своего бесплатного OAuth Client ID:</div>
-              <ol className="list-decimal pl-4 space-y-1 text-slate-400 text-[11px]">
-                <li>Перейдите в <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" className="text-cyan-400 underline font-mono">Google Cloud Console ↗</a> под аккаунтом <span className="text-white">d.nikulshin.dev@gmail.com</span>.</li>
-                <li>Нажмите <strong>Create Credentials → OAuth client ID</strong> (Application type: <em>Web application</em>).</li>
-                <li>В поле <strong>Authorized JavaScript origins</strong> добавьте: <code className="text-white bg-slate-900 px-1 rounded">{currentOrigin}</code>.</li>
-                <li>Скопируйте полученный Client ID и вставьте в поле выше.</li>
+              <div className="font-semibold text-white">Инструкция для подключения Google Cloud:</div>
+              <ol className="list-decimal pl-4 space-y-1.5 text-slate-400 text-[11px]">
+                <li>В <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" className="text-cyan-400 underline font-mono">Google Cloud Console ↗</a> перейдите в Credentials.</li>
+                <li>Нажмите <strong>Create Credentials → OAuth client ID</strong> (Web application).</li>
+                <li>В блоке <strong>«Authorized JavaScript origins»</strong> добавьте строгий origin: <code className="text-white bg-slate-900 px-1.5 py-0.5 rounded font-mono">{currentOrigin}</code> <em>(без слэша на конце)</em>.</li>
+                <li>Сохраните и вставьте полученный Client ID в поле выше.</li>
               </ol>
             </div>
           </div>
         )}
 
-        {/* Security & Architecture Note */}
+        {/* Security & Privacy */}
         <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 space-y-1.5 text-xs text-slate-400">
           <div className="flex items-center gap-1.5 text-cyan-400 font-semibold">
             <ShieldCheck className="w-4 h-4" />
-            <span>Конфиденциальность и безопасность:</span>
+            <span>Конфиденциальность и безопасность данных:</span>
           </div>
           <p className="text-[11px] leading-relaxed">
-            Все данные спринтов, резюме и контактов принадлежат только вам. Они не отправляются на сторонние серверы и сохраняются либо локально в вашем браузере, либо в вашем личном хранилище Google.
+            Все данные спринтов, резюме и контактов принадлежат только вам. Они не передаются третьим лицам и сохраняются локально либо в вашем персональном Google Диске.
           </p>
         </div>
       </div>
