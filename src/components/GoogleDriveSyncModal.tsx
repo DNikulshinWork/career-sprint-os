@@ -18,13 +18,20 @@ import {
   Check,
   Download,
   Upload,
-  Settings
+  Settings,
+  Key,
+  FolderOpen,
+  Sparkles,
+  Info
 } from 'lucide-react';
 import { 
   initAuth, 
   googleSignIn, 
   logout, 
-  getAccessToken 
+  getAccessToken,
+  getStoredCustomClientId,
+  setStoredCustomClientId,
+  signInWithGIS
 } from '../services/googleAuth';
 import { 
   saveToGoogleDrive, 
@@ -35,9 +42,7 @@ import {
   CareerSprintCloudData 
 } from '../services/googleDriveService';
 import { Sprint, JobApplication } from '../types';
-import { User } from 'firebase/auth';
 import { playTaskCompleteSound, triggerConfetti } from '../utils/effects';
-import firebaseConfig from '../../firebase-applet-config.json';
 
 interface GoogleDriveSyncModalProps {
   isOpen: boolean;
@@ -54,7 +59,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
   applications,
   onRestoreData
 }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
@@ -62,15 +67,25 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
   const [confirmRestoreId, setConfirmRestoreId] = useState<string | null>(null);
   
-  // Specific error handler for domain authorization
-  const [isDomainUnauthorized, setIsDomainUnauthorized] = useState(false);
+  // Custom Client ID state for direct Google API connection
+  const [activeTab, setActiveTab] = useState<'instant' | 'direct_api'>('instant');
+  const [customClientId, setCustomClientId] = useState<string>('');
+  const [isEditingClientId, setIsEditingClientId] = useState<boolean>(false);
   const [copiedDomain, setCopiedDomain] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Current domain
   const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'dnikulshinwork.github.io';
-  const firebaseSettingsUrl = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`;
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://dnikulshinwork.github.io';
+
+  // Initialize stored client ID
+  useEffect(() => {
+    const stored = getStoredCustomClientId();
+    if (stored) {
+      setCustomClientId(stored);
+    }
+  }, []);
 
   // Initialize Auth listener on mount
   useEffect(() => {
@@ -105,35 +120,39 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
     }
   };
 
-  const handleSignIn = async () => {
+  const handleSignInDirect = async () => {
     setIsLoading(true);
     setStatusMessage(null);
-    setIsDomainUnauthorized(false);
     try {
       const res = await googleSignIn();
       setUser(res.user);
       setToken(res.accessToken);
-      setStatusMessage({ type: 'success', text: `Успешный вход в аккаунт: ${res.user.email}` });
+      setStatusMessage({ type: 'success', text: `Успешный вход в аккаунт: ${res.user.email || 'Google User'}` });
       playTaskCompleteSound();
       await fetchBackups(res.accessToken);
     } catch (err: any) {
-      const errStr = (err.code || err.message || '').toString();
-      if (errStr.includes('auth/unauthorized-domain')) {
-        setIsDomainUnauthorized(true);
-        setStatusMessage({ 
-          type: 'error', 
-          text: `Домен ${currentDomain} не добавлен в список разрешенных доменов Firebase Authentication.` 
-        });
-      } else {
-        setStatusMessage({ type: 'error', text: err.message || 'Ошибка входа через Google' });
-      }
+      setStatusMessage({ 
+        type: 'error', 
+        text: err.message || 'Ошибка входа. Воспользуйтесь режимом «Файл для Google Диска» ниже.' 
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleCopyDomain = () => {
-    navigator.clipboard.writeText(currentDomain);
+  const handleSaveCustomClientId = () => {
+    setStoredCustomClientId(customClientId);
+    setIsEditingClientId(false);
+    setStatusMessage({
+      type: 'success',
+      text: customClientId.trim() 
+        ? 'Ваш личный Google Client ID сохранен! Теперь нажмите «Войти через Google».'
+        : 'Сброшено на настройки по умолчанию.'
+    });
+  };
+
+  const handleCopyOrigin = () => {
+    navigator.clipboard.writeText(currentOrigin);
     setCopiedDomain(true);
     setTimeout(() => setCopiedDomain(false), 2500);
   };
@@ -212,7 +231,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
     }
   };
 
-  // Instant File Backup / Restore (works everywhere, 100% offline & without domain restrictions)
+  // Instant File Backup / Restore (works everywhere, 100% offline & without domain limits)
   const handleDownloadFileBackup = () => {
     const totalTasks = sprints.reduce((acc, s) => acc + s.tasks.length, 0);
     const doneTasks = sprints.reduce((acc, s) => acc + s.tasks.filter(t => t.completed).length, 0);
@@ -238,7 +257,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
     playTaskCompleteSound();
     setStatusMessage({
       type: 'success',
-      text: 'Файл CareerSprint_State.json сохранен на ваше устройство! Вы можете загрузить его в свой Google Диск.'
+      text: 'Файл CareerSprint_State.json сохранен на ваше устройство! Теперь вы можете перенести его на Google Диск или открыть на другом устройстве.'
     });
   };
 
@@ -292,16 +311,44 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-xl font-bold text-white">
-                Синхронизация с Google Drive
+                Хранилище и Синхронизация данных
               </h3>
-              <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                OAuth 2.0
+              <span className="text-[10px] font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded-full">
+                Google Drive
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Хранение и упорядочение прогресса спринтов, базы откликов и артефактов в вашем личном облаке
+              Упорядочение спринтов, базы откликов и артефактов без ограничений платформ
             </p>
           </div>
+        </div>
+
+        {/* Tab switcher: Instant Cloud File vs Direct Google API */}
+        <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800">
+          <button
+            type="button"
+            onClick={() => setActiveTab('instant')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-lg transition-all ${
+              activeTab === 'instant'
+                ? 'bg-slate-800 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+            <span>⚡ Файл для Google Диска (Работает прямо сейчас)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('direct_api')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-lg transition-all ${
+              activeTab === 'direct_api'
+                ? 'bg-slate-800 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Key className="w-3.5 h-3.5 text-amber-400" />
+            <span>Прямой Google Drive API (OAuth)</span>
+          </button>
         </div>
 
         {/* Status Message */}
@@ -324,306 +371,233 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
           </div>
         )}
 
-        {/* Domain Authorization Guide Banner (if auth/unauthorized-domain occurred) */}
-        {isDomainUnauthorized && (
-          <div className="bg-amber-950/40 border border-amber-500/40 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2 text-amber-300 text-xs font-bold uppercase tracking-wider">
-              <Settings className="w-4 h-4" />
-              <span>Как разрешить авторизацию на GitHub Pages (1 шаг)</span>
-            </div>
-
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Google Firebase по умолчанию защищает вход и блокирует незнакомые домены. Чтобы авторизация заработала на <strong className="text-white">{currentDomain}</strong>:
-            </p>
-
-            <div className="bg-slate-950/80 rounded-lg p-3 text-xs text-slate-300 space-y-2 border border-slate-800">
-              <div className="flex items-start gap-2">
-                <span className="font-mono font-bold text-amber-400 shrink-0">1.</span>
-                <span>
-                  Откройте раздел настроек Firebase Auth:{' '}
-                  <a
-                    href={firebaseSettingsUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-cyan-400 underline inline-flex items-center gap-1 font-mono hover:text-cyan-300"
-                  >
-                    <span>Firebase Console → Settings</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </span>
-              </div>
-
-              <div className="flex items-start gap-2">
-                <span className="font-mono font-bold text-amber-400 shrink-0">2.</span>
-                <span>
-                  Перейдите во вкладку <strong className="text-white font-mono">Authorized domains</strong> (Разрешенные домены) и нажмите кнопку <strong className="text-white font-mono">Add domain</strong>.
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800">
-                <div className="flex items-center gap-1 text-[11px] text-slate-400">
-                  <span className="font-mono font-bold text-amber-400">3.</span>
-                  <span>Вставьте домен:</span>
-                  <code className="text-white bg-slate-900 px-1.5 py-0.5 rounded font-mono text-[11px] border border-slate-700">
-                    {currentDomain}
-                  </code>
+        {/* TAB 1: Instant Cloud File Backup & Restore (Zero friction, 100% reliable) */}
+        {activeTab === 'instant' && (
+          <div className="space-y-4">
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0 mt-0.5">
+                  <Cloud className="w-5 h-5" />
                 </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">
+                    Как это работает на GitHub Pages
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                    Так как GitHub Pages — это статический хостинг, самый надежный и быстрый способ синхронизации между вашим смартфоном, планшетом и рабочим ноутбуком — это единый файл состояния <strong className="text-white font-mono">CareerSprint_State.json</strong>.
+                  </p>
+                </div>
+              </div>
 
+              {/* Action buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={handleCopyDomain}
-                  className="flex items-center gap-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded text-[11px] font-medium transition-colors"
+                  onClick={handleDownloadFileBackup}
+                  className="flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold py-3 px-4 rounded-xl text-xs shadow-lg shadow-cyan-600/20 transition-all cursor-pointer"
                 >
-                  {copiedDomain ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                  <span>{copiedDomain ? 'Скопировано!' : 'Копировать'}</span>
+                  <Download className="w-4 h-4" />
+                  <span>1. Скачать CareerSprint_State.json</span>
                 </button>
+
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full flex items-center justify-center gap-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 font-semibold py-3 px-4 rounded-xl text-xs transition-all cursor-pointer"
+                  >
+                    <Upload className="w-4 h-4 text-emerald-400" />
+                    <span>2. Восстановить из файла .json</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick direct link to open Google Drive */}
+              <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
+                <span className="text-slate-400">Храните файл в папке Google Диска:</span>
+                <a
+                  href="https://drive.google.com/drive/my-drive"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-cyan-400 hover:text-cyan-300 font-semibold underline"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  <span>Открыть мой Google Диск ↗</span>
+                </a>
               </div>
             </div>
 
-            <p className="text-[11px] text-slate-400">
-              После добавления домена нажмите кнопку «Войти через Google» снова — авторизация пройдет мгновенно.
-            </p>
+            {/* Explanatory Info Box */}
+            <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3.5 text-xs text-slate-400 space-y-1">
+              <div className="flex items-center gap-1.5 text-slate-300 font-semibold">
+                <Info className="w-4 h-4 text-cyan-400" />
+                <span>Преимущество этого способа:</span>
+              </div>
+              <p className="text-[11px] leading-relaxed">
+                Файл содержит 100% данных: все выполненные задачи 6 спринтов, сохраненные ссылки на репозитории и резюме, заметки, воронку откликов с контактами и настройки ставок. Вы никогда не потеряете прогресс при очистке кэша браузера.
+              </p>
+            </div>
           </div>
         )}
 
-        {/* Auth State Box */}
-        {!user ? (
-          <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 text-center space-y-4">
-            <div className="max-w-md mx-auto text-xs text-slate-300 leading-relaxed">
-              Войдите в свой аккаунт Google, чтобы связать CareerSprint OS с вашим Google Диском. Данные будут храниться в отдельном зашифрованном файле <span className="font-mono text-cyan-400">CareerSprint_State.json</span>.
-            </div>
-
-            {/* Official Google Sign-in Button */}
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={handleSignIn}
-                disabled={isLoading}
-                className="inline-flex items-center gap-3 bg-white hover:bg-slate-100 text-slate-800 font-semibold px-5 py-2.5 rounded-xl shadow-md transition-all text-xs border border-slate-200 cursor-pointer disabled:opacity-60"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 48 48">
-                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
-                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
-                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
-                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
-                </svg>
-                <span>{isLoading ? 'Авторизация...' : 'Войти через Google'}</span>
-              </button>
-            </div>
-          </div>
-        ) : (
+        {/* TAB 2: Direct Google Drive API via User's Own OAuth Client ID */}
+        {activeTab === 'direct_api' && (
           <div className="space-y-4">
-            {/* User Profile Bar */}
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {user.photoURL ? (
-                  <img src={user.photoURL} alt={user.displayName || 'User'} className="w-9 h-9 rounded-full border border-cyan-500/40" />
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-cyan-600 flex items-center justify-center text-white font-bold text-xs">
-                    {(user.displayName || user.email || 'U')[0].toUpperCase()}
-                  </div>
-                )}
-                <div>
-                  <div className="text-xs font-bold text-white leading-tight">
-                    {user.displayName || 'Пользователь Google'}
-                  </div>
-                  <div className="text-[11px] text-slate-400 font-mono">
-                    {user.email}
-                  </div>
-                </div>
+            {/* Note about AI Studio Starter Tier restriction */}
+            <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl p-3.5 text-xs text-slate-300 leading-relaxed space-y-2">
+              <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+                <Settings className="w-4 h-4" />
+                <span>Почему Firebase блокирует домен:</span>
               </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  disabled={isLoading}
-                  className="flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-rose-400 bg-slate-900 hover:bg-rose-950/20 border border-slate-800 px-3 py-1.5 rounded-lg transition-all"
-                >
-                  <LogOut className="w-3 h-3" />
-                  <span>Выйти</span>
-                </button>
-              </div>
+              <p className="text-[11px] text-slate-400">
+                Как видно на вашем скриншоте, проект <code className="text-white font-mono bg-slate-900 px-1 py-0.5 rounded">automated-vector-xcb1c</code> находится в режиме <strong className="text-white">AI Studio Starter Tier</strong>. В таких служебных проектах Google отключает возможность добавлять сторонние домены в белый список Firebase.
+              </p>
+              <p className="text-[11px] text-slate-300">
+                Чтобы авторизация работала напрямую в автоматическом режиме через Google API, вы можете указать свой личный бесплатный <strong className="text-white">Google OAuth Client ID</strong> (создается в вашей личной консоли Google Cloud).
+              </p>
             </div>
 
-            {/* Sync Action Buttons */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={handleSaveToDrive}
-                disabled={isLoading}
-                className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-semibold py-3 px-4 rounded-xl text-xs shadow-lg shadow-blue-600/20 transition-all disabled:opacity-60 cursor-pointer"
-              >
-                <CloudUpload className="w-4 h-4" />
-                <span>Сохранить текущие данные на Диск</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => fetchBackups(token || undefined)}
-                disabled={isLoading}
-                className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium py-3 px-4 rounded-xl text-xs border border-slate-700 transition-all disabled:opacity-60 cursor-pointer"
-              >
-                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                <span>Проверить обновления на Диске</span>
-              </button>
-            </div>
-
-            {/* Cloud Files List */}
+            {/* Custom Client ID Form */}
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-white flex items-center gap-1.5">
-                  <Cloud className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Файлы синхронизации в вашем Google Диске:</span>
+                  <Key className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Личный Google OAuth Client ID (Опционально):</span>
                 </span>
-                <span className="text-[11px] text-slate-500 font-mono">
-                  {backups.length} файл(ов)
-                </span>
+                {customClientId && !isEditingClientId && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingClientId(true)}
+                    className="text-[11px] text-cyan-400 hover:underline"
+                  >
+                    Изменить
+                  </button>
+                )}
               </div>
 
-              {backups.length === 0 ? (
-                <div className="text-center py-6 text-xs text-slate-500">
-                  Резервная копия еще не создана. Нажмите «Сохранить текущие данные на Диск», чтобы выгрузить состояние.
+              {isEditingClientId || !customClientId ? (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. 123456789-abcdef.apps.googleusercontent.com"
+                    value={customClientId}
+                    onChange={(e) => setCustomClientId(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-amber-400"
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCopyOrigin}
+                      className="text-[11px] flex items-center gap-1 text-slate-400 hover:text-slate-200"
+                    >
+                      {copiedDomain ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>Origin: {currentOrigin}</span>
+                    </button>
+                    <div className="flex items-center gap-2">
+                      {customClientId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomClientId(getStoredCustomClientId());
+                            setIsEditingClientId(false);
+                          }}
+                          className="text-xs text-slate-400 hover:text-white px-2 py-1"
+                        >
+                          Отмена
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleSaveCustomClientId}
+                        className="text-xs bg-amber-600 hover:bg-amber-500 text-white font-semibold px-4 py-1.5 rounded-lg transition-all"
+                      >
+                        Сохранить Client ID
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {backups.map((b) => (
-                    <div
-                      key={b.id}
-                      className="bg-slate-900 border border-slate-800 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                <div className="bg-slate-900 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between">
+                  <span className="text-xs font-mono text-slate-300 truncate max-w-sm">
+                    {customClientId}
+                  </span>
+                  <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                    Активен
+                  </span>
+                </div>
+              )}
+
+              {/* Login Button with Client ID */}
+              {!user ? (
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={handleSignInDirect}
+                    disabled={isLoading}
+                    className="inline-flex items-center gap-2.5 bg-white hover:bg-slate-100 text-slate-800 font-semibold px-5 py-2.5 rounded-xl shadow-md transition-all text-xs border border-slate-200 cursor-pointer disabled:opacity-60"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 48 48">
+                      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                    </svg>
+                    <span>{isLoading ? 'Авторизация...' : 'Войти через Google'}</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between text-xs bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                    <span className="text-white font-semibold">{user.email || 'Авторизован'}</span>
+                    <button
+                      type="button"
+                      onClick={handleSignOut}
+                      className="text-rose-400 hover:underline text-[11px]"
                     >
-                      <div className="flex items-center gap-2.5">
-                        <FileText className="w-4 h-4 text-cyan-400 shrink-0" />
-                        <div>
-                          <div className="text-xs font-semibold text-white font-mono">
-                            {b.name}
-                          </div>
-                          <div className="text-[10px] text-slate-400 flex items-center gap-2 font-mono">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {new Date(b.modifiedTime).toLocaleString('ru-RU')}
-                            </span>
-                            {b.size && <span>• {b.size}</span>}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action buttons with custom confirmation */}
-                      <div className="flex items-center gap-2 self-end sm:self-auto">
-                        {confirmRestoreId === b.id ? (
-                          <div className="flex items-center gap-1 bg-amber-950/60 border border-amber-500/40 p-1 rounded-lg">
-                            <span className="text-[10px] text-amber-300 px-1">Заменить локальные данные?</span>
-                            <button
-                              type="button"
-                              onClick={() => handleRestoreFromDrive(b.id)}
-                              className="text-[10px] bg-amber-600 hover:bg-amber-500 text-white px-2 py-0.5 rounded font-bold"
-                            >
-                              Да
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmRestoreId(null)}
-                              className="text-[10px] text-slate-400 hover:text-white px-1"
-                            >
-                              Отмена
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setConfirmRestoreId(b.id)}
-                            className="flex items-center gap-1 text-[11px] bg-slate-800 hover:bg-cyan-600 text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg transition-colors"
-                          >
-                            <CloudDownload className="w-3.5 h-3.5" />
-                            <span>Восстановить в приложение</span>
-                          </button>
-                        )}
-
-                        {isDeletingId === b.id ? (
-                          <div className="flex items-center gap-1 bg-rose-950/60 border border-rose-500/40 p-1 rounded-lg">
-                            <span className="text-[10px] text-rose-300 px-1">Удалить файл?</span>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteBackup(b.id)}
-                              className="text-[10px] bg-rose-600 hover:bg-rose-500 text-white px-2 py-0.5 rounded font-bold"
-                            >
-                              Да
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setIsDeletingId(null)}
-                              className="text-[10px] text-slate-400 hover:text-white px-1"
-                            >
-                              Отмена
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setIsDeletingId(b.id)}
-                            className="text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-950/20 transition-colors"
-                            title="Удалить файл с Google Диска"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                      Выйти
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSaveToDrive}
+                    disabled={isLoading}
+                    className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-xl text-xs transition-all"
+                  >
+                    <CloudUpload className="w-4 h-4" />
+                    <span>Сохранить в Google Диск</span>
+                  </button>
                 </div>
               )}
             </div>
-          </div>
-        )}
 
-        {/* Offline File Sync Section (Always available, zero dependencies, no domain limits) */}
-        <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-              <Download className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Автономный бэкап в файл (работает без авторизации):</span>
-            </span>
-            <span className="text-[10px] text-slate-500 font-mono">100% Offline</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <button
-              type="button"
-              onClick={handleDownloadFileBackup}
-              className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs py-2 px-3 rounded-lg border border-slate-700 transition-colors"
-            >
-              <Download className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Скачать CareerSprint_State.json</span>
-            </button>
-
-            <div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs py-2 px-3 rounded-lg border border-slate-700 transition-colors"
-              >
-                <Upload className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Восстановить из файла .json</span>
-              </button>
+            {/* Quick 3-step guide for personal Google Cloud OAuth */}
+            <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 text-xs text-slate-300 space-y-2">
+              <div className="font-semibold text-white">Инструкция создания своего бесплатного OAuth Client ID:</div>
+              <ol className="list-decimal pl-4 space-y-1 text-slate-400 text-[11px]">
+                <li>Перейдите в <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" className="text-cyan-400 underline font-mono">Google Cloud Console ↗</a> под аккаунтом <span className="text-white">d.nikulshin.dev@gmail.com</span>.</li>
+                <li>Нажмите <strong>Create Credentials → OAuth client ID</strong> (Application type: <em>Web application</em>).</li>
+                <li>В поле <strong>Authorized JavaScript origins</strong> добавьте: <code className="text-white bg-slate-900 px-1 rounded">{currentOrigin}</code>.</li>
+                <li>Скопируйте полученный Client ID и вставьте в поле выше.</li>
+              </ol>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Security & Architecture Note */}
         <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 space-y-1.5 text-xs text-slate-400">
           <div className="flex items-center gap-1.5 text-cyan-400 font-semibold">
             <ShieldCheck className="w-4 h-4" />
-            <span>Конфиденциальность и архитектура доступа:</span>
+            <span>Конфиденциальность и безопасность:</span>
           </div>
           <p className="text-[11px] leading-relaxed">
-            Приложение запрашивает минимально достаточный скоуп <code className="text-white font-mono bg-slate-900 px-1 py-0.5 rounded">https://www.googleapis.com/auth/drive.file</code>. Это гарантирует, что у приложения есть доступ <strong>исключительно к файлам, которые оно создало само</strong>. Ваши остальные личные файлы, фотографии и документы на Диске остаются полностью недоступны.
+            Все данные спринтов, резюме и контактов принадлежат только вам. Они не отправляются на сторонние серверы и сохраняются либо локально в вашем браузере, либо в вашем личном хранилище Google.
           </p>
         </div>
       </div>
