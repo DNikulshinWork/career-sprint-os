@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Sprint, SprintTask } from '../types';
+import { honestFullResumeText } from '../data/auditData';
 import { 
   X, 
   CheckCircle2, 
@@ -157,11 +158,11 @@ export const TaskWorkbenchModal: React.FC<TaskWorkbenchModalProps> = ({
 
             <div className="bg-cyan-950/20 border border-cyan-500/30 rounded-xl p-3.5 flex items-center justify-between">
               <div className="text-xs text-slate-300">
-                Готовый текст резюме сеньор-уровня в Markdown:
+                Честный текст резюме (Fullstack Node.js / React / Next.js):
               </div>
               <button
                 type="button"
-                onClick={() => handleCopy('Fullstack Engineer (NestJS / Next.js 15 / TypeScript) • AI & RAG Integrator...', 'resume-quick')}
+                onClick={() => handleCopy(honestFullResumeText, 'resume-quick')}
                 className="text-xs flex items-center gap-1.5 bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1.5 rounded-lg transition-all"
               >
                 {copiedKey === 'resume-quick' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
